@@ -1,2 +1,70 @@
 
+ const readline = require("readline");
+
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+const isSameColor = (x1, y1, x2, y2) => (x1 + y1) % 2 === (x2 + y2) % 2;
+const toChessNotation = (col, row) => `${String.fromCharCode('A'.charCodeAt(0) + col)} ${row + 1}`;
+
+const solve = (x1, y1, x2, y2, res) => {
+    if (!isSameColor(x1, y1, x2, y2)) {
+        console.log('Impossible');
+        return;
+    }
+
+    if (x1 === x2 && y1 === y2) {
+        res.push([x2, y2]);
+        console.log(`0 ${toChessNotation(x1, y1)}`);
+        return;
+    }
+
+    if (Math.abs(x1 - x2) === Math.abs(y1 - y2)) {
+        res.push([x2, y2]);
+        console.log(`1 ${res.map(v => toChessNotation(v[0], v[1])).join(' ')}`);
+        return;
+    }
+
+    let found = false;
+    for (let col = 0; col < 8 && !found; col++) {
+        for (let row = 0; row < 8 && !found; row++) {
+            if (Math.abs(x1 - col) === Math.abs(y1 - row) &&
+                Math.abs(x2 - col) === Math.abs(y2 - row)) {
+                res.push([col, row]);
+                res.push([x2, y2]);
+                console.log(`2 ${res.map(v => toChessNotation(v[0], v[1])).join(' ')}`);
+                found = true;
+            }
+        }
+    }
+
+    if (!found) {
+        console.log('Impossible');
+    }
+};
+
+const main = async () => {
+    let input = [];
+    for await (const line of rl) {
+        input.push(line.trim());
+    }
+
+    const testCases = parseInt(input[0], 10);
+
+    for (let i = 1; i <= testCases; i++) {
+        let [startCol, startRow, endCol, endRow] = input[i].split(' ');
+        startCol = startCol.charCodeAt(0) - 'A'.charCodeAt(0);
+        startRow = parseInt(startRow, 10) - 1;
+        endCol = endCol.charCodeAt(0) - 'A'.charCodeAt(0);
+        endRow = parseInt(endRow, 10) - 1;
+
+        solve(startCol, startRow, endCol, endRow, [[startCol, startRow]]);
+    }
+
+    rl.close();
+};
+
+main();
  
