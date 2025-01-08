@@ -1,0 +1,176 @@
+//** Kattis Problem Mosaic Solved by: Dominika Berg. 2024-07-16 */
+
+//importera readline-modul
+const readline = require('readline');
+// definiera uppsättning av konstanter för de olika typer av former
+const Shape = {
+    UDF: 0,  // UNDEFINED
+    BLK: 1,  // BLACK TILE
+    WHT: 2,  // WHITE TILE
+    TRI_NW: 3,  // Triangle NW
+    TRI_NE: 4,  // Triangle NE
+    TRI_SE: 5,  // Triangle SE
+    TRI_SW: 6  // Triangle SW
+};
+
+// sätt maximala dimensioner för rutnätet med en padding på 2 
+const MAX_C = 24 + 2;  // Max bredd (plus 2 for padding)
+const MAX_R = 18 + 2;  // Max längd (plus 2 for padding)
+
+// initiala dimensioner av rutnätet
+let w = 0, h = 0;
+
+// listor för att hålla rutnätet och dess version med padding
+let in_grid = new Array(MAX_R + 2).fill('');
+let shp_grid = Array.from({ length: MAX_R + 2 }, () => Array(MAX_C + 2).fill(Shape.UDF));
+
+// funktion som bestämmer färgen på en form
+function clr(shape, pos) {
+    // returnera färg baserat på position och form
+    return shape < Shape.TRI_NW ? shape : (pos - 2 * shape + 15) % 8 < 4 ? Shape.BLK : Shape.WHT;
+}
+// funktion som skapar en "kvadrat" för validering
+function makeQuad(r, c) {
+    return (shp_grid[r][c] +
+            shp_grid[r][c + 1] * 8 +
+            shp_grid[r + 1][c + 1] * 64 +
+            shp_grid[r + 1][c] * 512);
+}
+// funktion som kontrollerar om en kvadrat är giltig
+function checkQuad(q) {
+    // bestämmer färger för varje position i kvadraten
+    let colors = [clr(q % 8, 5), clr(q % 8, 4),
+                  clr((q >> 3) % 8, 7), clr((q >> 3) % 8, 6),
+                  clr((q >> 6) % 8, 1), clr((q >> 6) % 8, 0),
+                  clr((q >> 9) % 8, 3), clr((q >> 9) % 8, 2)];
+    colors = colors.concat(colors.slice(0, 8));
+// kontroll om kvadraten uppfyller färgreglerna
+    let active = false;
+    let w_count = 0;
+    for (let color of colors) {
+        if (color === Shape.BLK) {
+            if (active && (w_count % 2 === 1 || w_count === 6)) {
+                return false;
+            }
+            active = true;
+            w_count = 0;
+        } else if (color === Shape.WHT) {
+            w_count++;
+        } else {
+            active = false;
+        }
+    }
+    return true;
+}
+// funktionen som initerar valideringstabellen för alla möjliga kvadrater
+function initQuad() {
+    return Array.from({ length: 1 << 12 }, (_, q) => checkQuad(q));
+}
+// funktionen för att räkna antalet trianglar i rutnätet
+function countTris() {
+    let count = 0;
+    for (let r = 1; r <= h; ++r) {
+        for (let c = 1; c <= w; ++c) {
+            if (shp_grid[r][c] >= Shape.TRI_NW) count++;
+        }
+    }
+    return count;
+}
+// funktionen som kontrollerar om en svart ruta är giltigt baserat på omgivande trianglar och ofyllda rutor
+function isBlkValid(r, c) {
+    if (in_grid[r][c] === '*') {
+        return true;
+    }
+    let tri_count = 0, udf_count = 0;
+    const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    for (let [dr, dc] of directions) {
+        let shape = shp_grid[r + dr][c + dc];
+        if (shape === Shape.UDF) {
+            udf_count++;
+        } else if (shape >= Shape.TRI_NW) {
+            tri_count++;
+        }
+    }
+    return tri_count <= parseInt(in_grid[r][c]) && parseInt(in_grid[r][c]) <= tri_count + udf_count;
+}
+// funktionen för att lösa rutnätet med rekursiv backtracking
+function resolveBrd(r, c, quad_valid) {
+    if (r > h) {  // om alla rader är färdigställda, lösningen har hittats
+        console.log(countTris());
+        return true;
+    }
+
+    if (c > w) {  // gå till nästa rad
+        return resolveBrd(r + 1, 1, quad_valid);
+    }
+// om den aktuella raden redan är en svart ruta, gå vidare till nästa kolumn
+    if (shp_grid[r][c] === Shape.BLK) {
+        return resolveBrd(r, c + 1, quad_valid);
+    }
+// försök att tilldela varje form till den aktuella rutan
+    for (let shape = Shape.WHT; shape <= Shape.TRI_SW; ++shape) {
+        shp_grid[r][c] = shape; // tilldelar den aktuella formen till rutan
+        let valid = true; // anta att formen är giltig tills motsatsen bevisas
+
+        // kontrollera kvadrater som påverkas av den aktuella formen
+        const directions = [[0, 0], [-1, 0], [0, -1], [-1, -1]];
+        for (let [dr, dc] of directions) {
+
+            // om en kvadrat inte är giltig när den aktuella formen är tilldelad, sätt valid till false
+            if (!quad_valid[makeQuad(r + dr, c + dc)]) {
+                valid = false;
+                break;
+            }
+        }
+        // kontrollera angränsande svarta rutor för giltighet
+        const directionsBlk = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        for (let [dr, dc] of directionsBlk) {
+            // om en angränsande svart ruta är ogiltig med den aktuella formen, sätt valid till false
+            if (shp_grid[r + dr][c + dc] === Shape.BLK && !isBlkValid(r + dr, c + dc)) {
+                valid = false;
+                break;
+            }
+        }
+        // om formen är giltig, fortsätt med nästa kolumn
+        if (valid && resolveBrd(r, c + 1, quad_valid)) {
+            return true; // om lösningen har hittats, returnera true
+        }
+        // återställ den aktuella rutan till odefinierad om formen inte leder till en lösning
+        shp_grid[r][c] = Shape.UDF;
+    }
+
+    return false;
+}
+// initialisering av valideringstabell för alla möjliga kvadrater
+const quad_valid = initQuad();
+// skapa en readline-gränssnitt
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+let inputLines = [];
+let currentLine = 0;
+// läsa in rad för rad 
+rl.on('line', (line) => {
+    inputLines.push(line);
+});
+// körs när all inmatning är läst
+rl.on('close', () => {
+    [w, h] = inputLines[0].split(" ").map(Number);
+    in_grid[0] = '*'.repeat(2 + w);
+    for (let j = 1; j <= h; ++j) {
+        in_grid[j] = '*' + inputLines[j] + '*';
+    }
+    in_grid[h + 1] = '*'.repeat(w + 2);
+
+    for (let r = 0; r <= h + 1; ++r) {
+        for (let c = 0; c <= w + 1; ++c) {
+            shp_grid[r][c] = in_grid[r][c] === '.' ? Shape.UDF : Shape.BLK;
+        }
+    }
+
+    if (!resolveBrd(1, 1, quad_valid)) {
+        console.log("No solution found");
+    }
+});
